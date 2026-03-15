@@ -4,7 +4,8 @@
 
 在 HFT / 量化交易语境里，可以理解为：
 
-> Tick（行情变化） → 系统感知 → 策略决策 → 风控检查 → 构造订单 → 订单到达交易所入口  
+> Tick（行情变化） → 系统感知 → 策略决策 → 风控检查 → 构造订单 → 订单到达交易所入口
+> Tick Update → System Perception → Strategy Logic → Pre-Trade Risk Check → Order Construction → Exchange Gateway
 > 这一整段时间 = tick‑to‑trade latency。
 
 ---
