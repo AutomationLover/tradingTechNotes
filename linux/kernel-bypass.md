@@ -70,6 +70,9 @@
 - tc：
   - 不经过 qdisc，tc filter / tc BPF 也观察不到这些包。
 
+EAL 是 DPDK 的环境抽象层，用来适配底层平台和完成初始化。
+在 DPDK 里，EAL = Environment Abstraction Layer（环境抽象层）。可以直接把它理解成：DPDK 的“运行时内核 + 启动器”。
+
 ---
 
 ## 3. XDP：在 `netif_receive_skb` 之前的驱动级 hook
