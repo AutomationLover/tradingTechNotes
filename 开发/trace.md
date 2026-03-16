@@ -124,3 +124,77 @@
 - 在驱动和板级代码中预留可开关的 trace 能力，为后续现场问题快速诊断打基础。
 
 如果放在今天看，这套方法其实就是早期版的“靠事件源和追踪框架做 root cause 分析”，只不过当年还没有现成的 ftrace/perf/eBPF，很多事情需要我们自己在内核里“搭一套简化的追踪基础设施”来完成。
+
+
+- “宏内部可以开关”：
+
+ ▫ 编译期：通过 ‎`CONFIG_BOOT_TRACE_DEBUG` 开 / 关整套功能。
+
+ ▫ 运行期：通过内核命令行 ‎`boot_trace=1` 控制是否真的 ‎`printk`。
+
+
+- 编译期开关 → 决定“有没有这段调试逻辑”。
+
+- 运行期开关 → 决定“这段调试逻辑此刻是否生效”。
+
+
+
+ 
+定义TRACE宏
+```c
+/* 1. 编译期开关：在 Kconfig 或 Makefile 里定义 CONFIG_BOOT_TRACE_DEBUG
+ *    没定义时，BOOT_TRACE 直接变成空，完全不产生代码
+ */
+#ifdef CONFIG_BOOT_TRACE_DEBUG
+
+/* 2. 运行期开关：用一个全局变量控制是否打印 */
+static int boot_trace_enabled = 0;
+
+/* 3. 内核参数：boot_trace=1 打开，boot_trace=0 关闭 */
+static int __init boot_trace_param(char *str)
+{
+    /* 不关心具体值，只要给了就打开；
+     * 如果你想严格解析 0/1，可以用 kstrtoint
+     */
+    boot_trace_enabled = 1;
+    return 0;
+}
+early_param("boot_trace", boot_trace_param);
+
+/* 4. 真正的宏：只有在编译期开启 + 运行期开启时才 printk */
+#define BOOT_TRACE(fmt, ...)                                      \
+    do {                                                          \
+        if (boot_trace_enabled)                                   \
+            printk(KERN_INFO "BOOT_TRACE: " fmt, ##__VA_ARGS__);  \
+    } while (0)
+
+#else  /* !CONFIG_BOOT_TRACE_DEBUG */
+
+/* 5. 未开启调试时，宏直接是空，调用处不产生任何代码 */
+#define BOOT_TRACE(fmt, ...)  do { } while (0)
+
+#endif /* CONFIG_BOOT_TRACE_DEBUG */
+
+```
+
+使用
+```c
+void __init my_board_init(void)
+{
+    int step = 0;
+
+    BOOT_TRACE("stage_%d: start board init\n", step++);
+
+    init_clocks();
+    BOOT_TRACE("stage_%d: clocks inited\n", step++);
+
+    init_irqs();
+    BOOT_TRACE("stage_%d: irqs inited\n", step++);
+
+    init_serial();
+    BOOT_TRACE("stage_%d: serial inited\n", step++);
+}
+
+```
+
+
