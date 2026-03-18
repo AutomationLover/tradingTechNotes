@@ -1,5 +1,7 @@
 # Coredump & Valgrind（课程第三节）笔记
 
+https://www.udemy.com/course/learn-linux-user-space-debugging/learn/lecture/16684906#overview 
+
 ## 1. Core dump：概念与用途
 
 - **Core dump 定义**：程序崩溃时，由内核生成的一份“内存快照”文件。内容包括：
