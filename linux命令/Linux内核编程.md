@@ -1,8 +1,8 @@
 # Linux Kernel Programming: Knowledge and Skills Summary
 
-This document summarizes all the knowledge and skills taught in this repository—a comprehensive Linux kernel module development course organized across five days.
+This document summarizes all the knowledge and skills taught in this lesson — a comprehensive Linux kernel module development course organized across five days.
 
-https://www.udemy.com/course/learn-linux-kernel-programming/learn/lecture/21764422#overview
+Link: https://www.udemy.com/course/learn-linux-kernel-programming/learn/lecture/21764422#overview
 
 ---
 
