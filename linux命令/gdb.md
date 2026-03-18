@@ -310,6 +310,7 @@ print 相关变量   # 确认哪个指针/索引有问题
 
 
 -------
+
 # GDB Part 2（上半节）笔记
 
 ## 1. GDB 是什么，用来干什么？
@@ -686,110 +687,324 @@ print 相关变量   # 确认哪个指针/索引有问题
 
 --------
 
-# GDB Part 2（下半节）笔记：更进阶的用法
+# GDB Part 2（下半节）完整笔记
 
-## 1. 调用栈与 frame：多层函数调用怎么查
+## 1. 调用栈与 frame（延续）
 
-- 程序运行时有 **call stack**，每次函数调用会在栈上生成一个 **frame**：
-  - 保存返回地址
-  - 保存本函数的局部变量
-- 工具命令：
-  - `backtrace` / `bt`：列出当前调用栈中所有 frame（0 是当前，越大越“上游”）。
-  - `frame N`：切换到第 N 个 frame，之后的 `list` / `info locals` / `print` 都针对该 frame。
-  - `info frame`：查看当前 frame 的底层细节（栈地址、返回地址、局部变量保存位置等）。
+这一段开头先巩固了调用栈 / frame 的概念，并补充了几个配套命令：
 
-心智模型：  
-`bt` 看“谁调谁”，`frame` 切到对应层，`info locals` 看该层的局部变量。
+- `backtrace` / `bt`：列出当前调用栈的所有 frame（0 是当前，越大越“上层调用者”）。
+- `frame N`：切换到第 N 个 frame，再用 `list`、`info locals`、`print` 就是针对这个 frame。
+- `info frame`：显示当前 frame 的底层信息：
+  - 当前帧在栈上的地址
+  - 当前指令指针（IP）和返回地址
+  - 参数列表和局部变量在栈上的位置
+
+配合使用方法类似：
+
+1. `bt` 看出 `main -> func1 -> func2` 这样的调用链。
+2. `frame 1` 切到 `func1`，`info locals` / `print n` 看局部变量。
+3. `frame 0` 切回 `func2`，`print i` 看另一个函数的局部。
 
 ---
 
-## 2. info 系列：变量、参数、寄存器
+## 2. `info` 系列命令总结
 
-这节重点介绍了几个常用 `info` 子命令：
+课程在这里系统过了一遍 `info` 相关命令：
 
-- `info functions`：列出所有函数（包括 glibc 等，用户代码只需关注自己那部分）。
-- `info variables`：列出全局 / 静态变量（包括库里的，全局变量排查时有用）。
+- `info functions`：所有函数（包含 C 库）。
+- `info variables`：所有全局 / static 变量（所有源文件和库）。
 - `info locals`：当前 frame 的局部变量。
 - `info args`：当前 frame 的参数列表。
+- `info breakpoints`：所有断点和 watchpoint。
 - `info registers` / `info reg`：
-  - 列出所有 CPU 寄存器的值：
-    - 第一列：寄存器名（`rax`, `rbx`, `rsp`…）
-    - 第二列：十六进制
-    - 第三列：十进制
-  - `info reg rax`：单看 `rax`。
+  - 列出所有寄存器：名字、十六进制值、十进制值。
+  - 如 `info reg rax`、`info reg rsp` 只看某一个。
 
 心智模型：  
-- 看函数内部：`info args` + `info locals`。  
-- 看底层执行状态：`info registers`。  
+- “看函数上下文” → `info args` / `info locals`。  
+- “看调用关系” → `bt` / `frame` / `info frame`。  
+- “看 CPU 现场” → `info registers`。  
 
 ---
 
-## 3. C 关键字 `register` 与寄存器观测
+## 3. `register` 关键字与寄存器观察
 
-讲师用 GDB 验证了 `register` 关键字的效果：
+讲师用一个小例子讲清楚 `register` 局部变量在 GDB 中的表现：
 
 - 代码中：
 
-  - `register int y;`  
-  - GDB 内 `info locals` 看不到地址（`&y` 会失败），因为“理论上”放在寄存器里。
-- `info registers` 输出中，可看到某个寄存器（如 `rbx`）保存了 y 的值，随着代码执行变化。
+  - `register int y;`
+- 在 GDB 中：
+  - `info locals` 能看到 `y` 这个变量。
+  - 但 `print &y` 会失败：**register 变量没有可用的内存地址**（按 C 语义，它被放在寄存器，而不是内存）。
+  - 通过 `info registers` 可以看到某个寄存器（如 `rbx`）的值随 `y` 的变化而变化。
 
-注意：现代编译器基本会忽略 `register` 关键字，寄存器分配由优化器决定；GDB 的例子只是用来说明概念。
-
----
-
-## 4. 条件断点：只在特定条件时停
-
-问题：for 循环里打断点，默认每次迭代都停，很烦。
-
-GDB 提供两种方式设置条件断点：
-
-### 4.1 一开始就带条件
-
-- 语法：
-
-  - `break <line> if <expr>`
-  - 例如：`break 27 if i == 400`
-
-效果：只有当执行到第 27 行且 `i == 400` 时才会停下来，其余迭代直接跑过去。
-
-### 4.2 给已有断点加条件
-
-1. 先设断点：
-
-   - `break 27`
-
-2. 用 `info breakpoints` 看断点编号，比如是 `3`。
-3. 添加条件：
-
-   - `condition 3 i == 5`
-
-之后只有当 `i == 5` 且运行到该断点位置时，程序才会停。
-
-心智模型：用条件断点可以避免在大循环里“疯狂连停”，只关心某几次迭代。
+概念上是正确的，实际现代编译器会自己决定寄存器分配，`register` 更多是“建议”，但 GDB 这个例子帮你建立直觉：  
+“有些变量压根在寄存器里，没有稳定的内存地址可以取”。
 
 ---
 
-## 5. watchpoint：盯变量，而不是盯某一行代码
+## 4. 条件断点（完整）
 
-**断点** 是绑在“代码位置”上的；  
-**watchpoint** 是绑在“变量值变化”上的。
+在上半节已经提到条件断点，这一段用两个完整例子复习了两种写法：
 
-三种：
+1）已有断点，后加条件：
 
-1. `watch expr`：
-   - 当 `expr` 被 **写入（值改变）** 时停下。
-   - 常用于“谁改了这个变量？”的场景。
-2. `rwatch expr`：
-   - 当 `expr` 被 **读** 时停下。
-3. `awatch expr`：
-   - 当 `expr` 被 **读或写** 时都停下。
+- 先设断点：
 
-同样可以用 `info breakpoints` 查看当前 watchpoints，因为 GDB 把它们也归到断点表里。
+  break 27
 
-注意：
+- 查看断点编号：
 
--
+  info breakpoints    # 比如该断点是 3 号
 
+- 添加条件（只在 i == 5 时停）：
 
+  condition 3 i == 5
+
+2）一开始就带条件：
+
+- 例如在行 11 上，只在 `i == 400` 时停：
+
+  break 11 if i == 400
+
+效果：for 循环跑到 `i == 400` 时才第一次停，前 0–399 次迭代不会干扰调试。
+
+---
+
+## 5. Watchpoint：监视变量读写
+
+这部分是断点的“变量视角”版本：
+
+- 普通断点：绑在“某一行代码”上。
+- watchpoint：绑在“某个表达式/变量的值”上。
+
+三种命令：
+
+1. `watch expr`  
+   - 当 `expr` 被**写入（值改变）** 时停下。
+   - 典型例如：`watch x` → 只要 `x` 被修改，就会显示 old value / new value 并停下。
+
+2. `rwatch expr`  
+   - 当 `expr` 被**读** 时停下。
+   - 常用在追查“谁在读这个危险指针 / 密钥”等。
+
+3. `awatch expr`  
+   - 当 `expr` 被**读或写**时都停下。
+
+注意点：
+
+- 表达式必须在当前作用域里（比如 watch x 之前必须先 `run` 到有 `x` 的时候，否则 “no symbol x in current context”）。
+- watchpoint 也出现在 `info breakpoints` 里，只是 type 不同。
+- 单步 `next` 时 watchpoint 的提示可能不明显；通常在 `continue` 下更有用，它会打印 old/new 值，比如：
+  - `Old value = 0`
+  - `New value = 10`
+
+启用 / 禁用：
+
+- 禁用 watchpoint（编号 2）：
+
+  disable 2
+
+- 重新启用：
+
+  enable 2
+
+---
+
+## 6. TUI 模式：GDB 内看源码界面
+
+讲师介绍了 GDB 自带的文本 UI 模式（类似简易 IDE）：
+
+- 启动时直接用：
+
+  gdb -tui ./prog
+
+- 或在 GDB 内切换：
+
+  Ctrl+X, A        # 开启/关闭 TUI 模式
+
+TUI 模式特点：
+
+- 终端上方展示源码，当前执行行高亮。
+- 下方是 GDB 命令行。
+- 可以正常使用 `break`、`next`、`step`、`continue` 等。
+- 若显示乱掉，用：
+
+  Ctrl+L          # 重新 repaint 屏幕
+
+适合：在纯终端环境下，也能直观看到“当前停在哪一行”。
+
+---
+
+## 7. 日志记录：`set logging`
+
+想把 GDB 交互过程保存到文件里，方便回顾 / 分享时，可以用 logging：
+
+- 开启日志：
+
+  set logging on
+
+  - 默认输出到当前目录的 `gdb.txt`（注意课程里老师打错命令曾覆盖源码，这是个坑）。
+
+- 关闭日志：
+
+  set logging off
+
+- 改变日志文件名：
+
+  set logging file my-gdb.log
+
+之后你在 GDB 里的命令和输出就会被追加到这个文件里。
+
+---
+
+## 8. 附加到已经在跑的进程：`attach` / `detach`
+
+场景：某个程序已经在后台跑了（比如一个循环里 `sleep` 的小服务），想在不重启它的情况下调试一下。
+
+步骤：
+
+1. 在 shell 里启动程序，例如：
+
+   ./prog &    # 后台跑
+
+2. 在 GDB 里查 PID，可以用：
+
+   (gdb) shell ps -f | grep prog
+
+3. 用 PID attach：
+
+   attach <PID>
+
+   - 需要 root 权限时，要 `sudo gdb`。
+
+4. attach 后进程会停住，这时可以像普通调试一样：
+   - `bt`、`frame`、`info locals`、`break` 等。
+   - 甚至可以设条件断点：例如“当 i == 40 时停下”。
+
+5. 调试结束，用：
+
+   detach
+
+   - 进程继续运行，GDB 和它断开。
+
+心智模型：`attach` 用于“临时接管一个已经运行的进程”。
+
+---
+
+## 9. 看汇编：`disassemble`
+
+要在 GDB 中看某个函数的汇编，可以用：
+
+- 针对当前函数：
+
+  disassemble
+
+- 或指定函数名：
+
+  disassemble main
+
+输出包括每条指令地址、opcode 和汇编语句。  
+配合单步：
+
+- 先 `break main` → `run` 停在 main。
+- `disassemble main` 看整体。
+- `next` / `step` 单步后再 `disassemble main` 看指令执行到哪。
+
+适合：
+
+- 做体系结构 / 性能分析，验证编译器生成的代码。
+- 调试优化、内联、奇怪 crash 等 low-level 问题。
+
+---
+
+## 10. `start` 命令：`break main` + `run` 的快捷方式
+
+之前习惯的启动姿势是：
+
+- `gdb ./prog`
+- `break main`
+- `run`
+
+课程介绍了一个简化命令：
+
+- `start`
+
+等价于：
+
+- 在 `main` 第一行自动设置一个断点，并运行程序直到这里停下。
+
+之后你可以直接 `next` / `step` 漫游 main，而不必手动设置 main 的断点。
+
+---
+
+## 11. `command`：给断点挂一组自动执行的 GDB 命令
+
+场景：每次 hit 到某个断点时，都想自动打印一些变量，而不是每次手动打 `print`。
+
+用法：
+
+1. 设置断点，例如：
+
+   break 14
+
+2. 绑定命令：
+
+   command 1     # 1 是断点编号
+   print loop
+   end
+
+3. 之后每次断点 1 被命中时，GDB 会自动执行 `print loop`（可以多条命令）。
+
+可以配合条件断点和 logging 做“调试脚本”。
+
+---
+
+## 12. 多源文件时的断点写法（Q&A 补充）
+
+最后的问答中讲师补充了一点多文件项目的写法：
+
+- 当工程有多个 `.c` / `.cpp` 文件时，可以明确指定文件名：
+
+  - 按行号下断：
+
+    break file.c:42
+
+  - 按函数名：
+
+    break file.c:my_func
+
+避免在重名函数 / 多个翻译单元中模糊匹配。
+
+---
+
+## 13. GDB 全系列要点到这里基本齐活
+
+结合 GDB Part 1 + Part 2，GDB 这一块的整体能力矩阵大概是：
+
+- 基础：
+  - `-g` 编译、`gdb -q ./prog`
+  - `run` / `continue` / `quit`
+- 断点与单步：
+  - `break` / `info breakpoints` / `delete`
+  - `next` / `step` / `finish`
+  - `start` 作为快捷启动
+- 调用栈与 frame：
+  - `bt` / `frame` / `info frame`
+- 检查状态：
+  - `print` / `ptype` / `x` / `info locals` / `info args`
+  - `info registers`
+- 条件与变量驱动：
+  - 条件断点：`break ... if expr` / `condition N expr`
+  - watchpoint：`watch` / `rwatch` / `awatch`
+  - `command N ... end` 在断点自动执行一组命令
+- 进阶：
+  - TUI：`gdb -tui` 或 Ctrl+X,A
+  - 日志：`set logging on/off`, `set logging file`
+  - attach：`attach PID` / `detach`
+  - 汇编：`disassemble`
+
+这些构成了用户态 C 程序调试时几乎所有常用手段，为后面的 coredump / valgrind / strace / ltrace 铺好了基础。
 
