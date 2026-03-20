@@ -421,3 +421,118 @@ ORDER BY
   country,
   year;
 ```
+
+---
+
+## NTILE 是什么？
+
+NTILE(n) 是一个窗口函数，用来把每个分组里的行**平均分成 n 份（分位桶）**，并给每行标一个桶号：1, 2, …, n。
+
+可以理解为：“对每个窗口做分组排序，然后切成 n 段”。
+
+---
+
+## 语法结构
+
+NTILE(n) OVER (
+  [PARTITION BY 分组列…]
+  ORDER BY 排序列…
+)
+
+关键点：
+
+- n：要分成多少个桶（整数，比如 4、10 等）
+- PARTITION BY：可选，定义“对谁单独分桶”
+  - 比如 `PARTITION BY country` → 每个国家各自分桶
+- ORDER BY：必选，定义按什么顺序切桶
+  - 比如 `ORDER BY happiness_score DESC` → 高分在前的桶号小
+
+---
+
+## 直观例子：按幸福分做四分位
+
+假设表 happiness_scores(country, year, happiness_score)
+
+每个国家内部，按幸福分从高到低分成 4 桶（大致四分位）：
+
+SELECT
+  country,
+  year,
+  happiness_score,
+  NTILE(4) OVER (
+    PARTITION BY country
+    ORDER BY happiness_score DESC
+  ) AS quartile
+FROM happiness_scores
+ORDER BY country, quartile, happiness_score DESC;
+
+含义：
+
+- quartile = 1：该国“最高分那一批”  
+- quartile = 4：该国“最低分那一批”  
+- 行数不一定能被 4 整除，NTILE 会尽量把**前面的桶多分几行**，保证差距最多 1 行
+
+---
+
+## NTILE 如何分配行？
+
+示例：某个国家有 10 行数据，用 NTILE(4)
+
+- 10 ÷ 4 = 2 余 2  
+- 一共 10 行，要分成 4 桶，理论上平均 2.5 行/桶  
+- 实际分配：  
+  - 前 2 个桶：3 行（多拿 1 行）  
+  - 后 2 个桶：2 行  
+- 所以桶大小可能是 `[3,3,2,2]`，但排序后**前面的桶优先分配**
+
+通用规则：
+
+1. 先按 ORDER BY 排好序  
+2. 计算每桶“理想大小”，然后前面的桶多拿一行（如果有余数）  
+3. 依次给行编号：第 1 桶标 1，第 2 桶标 2…
+
+---
+
+## 常见应用场景
+
+1) 做分位数/等级划分
+
+- 四分位 / 十分位 / 百分位：
+  - NTILE(4)、NTILE(10)、NTILE(100)
+- KPI 分档：
+  - quartile = 1 → “Top performers”  
+  - quartile = 4 → “Bottom performers”
+
+2) 打分层标签，便于聚合分析
+
+例如：按全球幸福分从高到低分成 10 桶，看“不同桶的平均 GDP”：
+
+SELECT
+  NTILE(10) OVER (ORDER BY happiness_score DESC) AS decile,
+  AVG(happiness_score) AS avg_score,
+  AVG(gdp_per_capita) AS avg_gdp
+FROM happiness_scores
+GROUP BY decile
+ORDER BY decile;
+
+3) 做简单抽样 / 分流
+
+- 比如想把一批客户分成 5 组，做 A/B/C/D/E 实验，可以用 NTILE(5) 给组号。
+
+---
+
+## 和 RANK / DENSE_RANK 的区别
+
+- RANK / DENSE_RANK：  
+  - 是“名次”，多少名取决于数据里不同值的数量。  
+  - 并列时名次数量不可控。
+
+- NTILE(n)：  
+  - 是“切成 n 份的桶号”，n 是你指定的。  
+  - 主要关注“相对分段”（前 25%、中间 50% 等），不是精确名次。
+
+一句话记：
+
+- 要“第几名”：用 RANK / DENSE_RANK  
+- 要“属于哪一档”：用 NTILE(n)
+
