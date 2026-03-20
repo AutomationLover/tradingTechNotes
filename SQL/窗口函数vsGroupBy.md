@@ -153,3 +153,271 @@ FROM world_happiness;
 > Window functions 不折叠行，只在每个 window 内做计算并保留原始粒度。
 
 后面你看到的 ROW_NUMBER / RANK / LEAD / LAG 都是在这个框架下的不同“计算方式”而已。
+
+---
+
+## 窗口函数里的常用“计算方式”概览
+
+四个关键词：  
+- ROW_NUMBER：组内“行号”  
+- RANK / DENSE_RANK：组内“名次”（有并列时行为不同）  
+- LEAD / LAG：看“下一行 / 上一行”的值（做对比、差分）
+
+下面都假设有一个分区：`PARTITION BY country ORDER BY year` 或类似。
+
+---
+
+## 1. ROW_NUMBER：组内唯一行号
+
+**作用**：在每个窗口内，按指定排序给每行一个唯一编号 1,2,3,…，**没有并列**。
+
+典型写法：
+
+ROW_NUMBER() OVER (
+  PARTITION BY country
+  ORDER BY happiness_score DESC
+) AS rn
+
+常见用途：
+
+- 取“组内 Top 1”：每个国家最新一条记录、最高分记录等  
+
+  外层再写：
+
+SELECT *
+FROM (
+  SELECT
+    country,
+    year,
+    happiness_score,
+    ROW_NUMBER() OVER (
+      PARTITION BY country
+      ORDER BY happiness_score DESC
+    ) AS rn
+  FROM world_happiness
+) t
+WHERE rn = 1;
+
+- 对时间序列做行号，后面用行号做 join 或过滤  
+- 给每组数据打一个稳定顺序（比单纯 ORDER BY 可控）
+
+特点：即使有两行 score 完全一样，也会强行一个 1，一个 2，没有“并列”。
+
+---
+
+## 2. RANK / DENSE_RANK：组内排名（处理并列）
+
+**共同点**：  
+- 都是“按排序字段做名次”的窗口函数。  
+- 写法类似，只是并列时行为不同。
+
+### 2.1 RANK：有并列且跳号
+
+例子：
+
+RANK() OVER (
+  PARTITION BY country
+  ORDER BY happiness_score DESC
+) AS rnk
+
+若某国 happiness_score 排序后是：  
+- 9.0  
+- 8.5  
+- 8.5  
+- 7.0  
+
+则对应 RANK 为：  
+- 1  
+- 2  
+- 2  
+- 4  ← 跳过 3
+
+**用途**：  
+- 更贴近“比赛名次”的直觉（两个人并列第 2，下一名第 4）。  
+- 做 Top N 排名时，如果要保留所有并列的，就 WHERE rnk <= N。
+
+### 2.2 DENSE_RANK：有并列但不跳号
+
+例子：
+
+DENSE_RANK() OVER (
+  PARTITION BY country
+  ORDER BY happiness_score DESC
+) AS drnk
+
+同样分数 9.0, 8.5, 8.5, 7.0，对应 DENSE_RANK 为：  
+- 1  
+- 2  
+- 2  
+- 3  ← 不跳号
+
+**用途**：  
+- 需要“等级”而不是“绝对名次”时（比如幸福等级=1、2、3…）  
+- 后续要用 rank 作为 bucket/分层时，更适合用 DENSE_RANK。
+
+### RANK vs DENSE_RANK 总结
+
+- RANK：并列会跳号（1,2,2,4）  
+- DENSE_RANK：并列不跳号（1,2,2,3）  
+- ROW_NUMBER：强行唯一（1,2,3,4）
+
+---
+
+## 3. LAG / LEAD：看前一行/后一行
+
+这两个是典型的“相对位置”窗口函数，**对比当前行与前后行**特别有用。
+
+通用形式：
+
+LAG(col [, offset, default]) OVER (...)
+LEAD(col [, offset, default]) OVER (...)
+
+- col：要取的列，比如 score、price、salary  
+- offset：往前/后第几行，默认 1  
+- default：找不到时的默认值（比如第一行没前一行）
+
+### 3.1 LAG：取“前一行”的值
+
+例子：计算每国每年幸福分数与“上一年”的差值：
+
+SELECT
+  country,
+  year,
+  happiness_score,
+  LAG(happiness_score) OVER (
+    PARTITION BY country
+    ORDER BY year
+  ) AS prev_score,
+  happiness_score
+    - LAG(happiness_score) OVER (
+        PARTITION BY country
+        ORDER BY year
+      ) AS diff_from_prev
+FROM world_happiness;
+
+计算方式：
+
+- 对每个 country 按 year 排序。  
+- 当前行能看到“上一年”的分数 prev_score。  
+- diff_from_prev 就是当前 - 上一年的变化（同比/环比）。
+
+用途：
+
+- 同一实体（国家、用户、股票）不同时间点的差分、增长率。  
+- 检测“突然变化”：abs(diff_from_prev) > 阈值。  
+- 分析趋势：正负号看是上升还是下降。
+
+### 3.2 LEAD：取“下一行”的值
+
+例子：看“下一个时间点”的值：
+
+SELECT
+  country,
+  year,
+  happiness_score,
+  LEAD(happiness_score) OVER (
+    PARTITION BY country
+    ORDER BY year
+  ) AS next_score,
+  LEAD(happiness_score) OVER (
+    PARTITION BY country
+    ORDER BY year
+  ) - happiness_score AS diff_to_next
+FROM world_happiness;
+
+用途：
+
+- 对未来值做对比（比如当前 vs 下一期指标）。  
+- 检查从当前到下一期的变化方向和幅度。  
+- 滚动窗口内做“未来 n 步”的对比（改 offset 即可）。
+
+---
+
+## 4. 典型“计算模式”小结
+
+1. ROW_NUMBER 模式：  
+   - 先按 `PARTITION BY` 定义组，再按 `ORDER BY` 排序。  
+   - 给每行一个唯一行号。  
+   - 用于：取组内 Top1/TopN、去重保留一条、为后续 join/过滤打 tag。
+
+2. RANK / DENSE_RANK 模式：  
+   - 同样按分组 + 排序。  
+   - 做“组内名次”，支持并列。  
+   - 用于：榜单、排名、TopN（包含并列）、分层评分。
+
+3. LAG / LEAD 模式：  
+   - 按“时间/序列字段”排序。  
+   - 当前行读取上一行或下一行的值。  
+   - 用于：环比、前后对比、变化量/增长率、异常跳变检测。
+
+如果你愿意，我可以基于你课程里的 happiness_scores 表，写一组“统一 SQL 模板”：把 ROW_NUMBER / RANK / LEAD / LAG 放在一条查询里，方便你直接贴到 MySQL Workbench 里跑。
+
+---
+
+```sql
+-- 统一示例：在同一条查询里同时使用 ROW_NUMBER / RANK / DENSE_RANK / LAG / LEAD
+-- 表结构假设：
+--   happiness_scores(country, year, happiness_score, gdp_per_capita, ...)
+
+SELECT
+  country,
+  year,
+  happiness_score,
+
+  ------------------------------------------------------------------
+  -- 1. 行号 / 排名类：在「每个国家(country)」内部，按「年份(year)」排序
+  ------------------------------------------------------------------
+
+  -- 每个国家内部按年份升序的唯一行号（1,2,3,...）
+  ROW_NUMBER() OVER (
+    PARTITION BY country
+    ORDER BY year ASC
+  ) AS rn_by_year,
+
+  -- 每个国家内部按幸福分降序的“比赛名次”（有并列会跳号：1,2,2,4）
+  RANK() OVER (
+    PARTITION BY country
+    ORDER BY happiness_score DESC
+  ) AS rnk_by_score,
+
+  -- 每个国家内部按幸福分降序的“密集名次”（有并列但不跳号：1,2,2,3）
+  DENSE_RANK() OVER (
+    PARTITION BY country
+    ORDER BY happiness_score DESC
+  ) AS dense_rnk_by_score,
+
+  ------------------------------------------------------------------
+  -- 2. LAG / LEAD：对比同一国家前一年 / 后一年的分数
+  ------------------------------------------------------------------
+
+  -- 同一国家「上一年」的幸福分（按 year 升序）
+  LAG(happiness_score) OVER (
+    PARTITION BY country
+    ORDER BY year ASC
+  ) AS prev_score,
+
+  -- 与上一年的差值 = 当前 - 上一年（同比/环比）
+  happiness_score
+    - LAG(happiness_score) OVER (
+        PARTITION BY country
+        ORDER BY year ASC
+      ) AS diff_from_prev,
+
+  -- 同一国家「下一年」的幸福分（按 year 升序）
+  LEAD(happiness_score) OVER (
+    PARTITION BY country
+    ORDER BY year ASC
+  ) AS next_score,
+
+  -- 与下一年的差值 = 下一年 - 当前
+  LEAD(happiness_score) OVER (
+    PARTITION BY country
+    ORDER BY year ASC
+  ) - happiness_score AS diff_to_next
+
+FROM happiness_scores
+-- 外层 ORDER BY 只影响最终展示顺序，不影响窗口里的计算顺序
+ORDER BY
+  country,
+  year;
+```
