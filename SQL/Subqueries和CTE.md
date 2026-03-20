@@ -1,5 +1,7 @@
 ## Subqueries 与 CTE：概念、异同与应用场景
 
+https://www.udemy.com/course/sql-advanced-queries/learn/lecture/47029165#overview
+
 本文用 Markdown 结构组织概念说明；所有 SQL 代码以纯文本形式嵌入，方便你直接复制。
 
 ---
