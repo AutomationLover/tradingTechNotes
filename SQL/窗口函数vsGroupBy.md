@@ -536,3 +536,152 @@ ORDER BY decile;
 - 要“第几名”：用 RANK / DENSE_RANK  
 - 要“属于哪一档”：用 NTILE(n)
 
+---
+
+## 结论先说
+
+- **要严格的 P50 / P95 / P99（真正的分位数）**：不要用 NTILE。  
+- NTILE 适合“分桶打标签”（比如 Q1~Q4、T1~T10），不适合精确算 P99。  
+- 更合适的是：数据库自带的 **percentile 函数**（如 `PERCENTILE_CONT` / `PERCENTILE_DISC`），或者用排序 + 行号/排名自己算。
+
+下面按“网络延迟 P99 场景”来讲。
+
+---
+
+## 1. NTILE 能干什么，为什么不适合 P99
+
+假设你有一堆 `latency_ms` 数据，想了解“高/中/低”三档：
+
+SELECT
+  latency_ms,
+  NTILE(3) OVER (ORDER BY latency_ms) AS bucket
+FROM latency_logs;
+
+- bucket = 1：偏低  
+- bucket = 2：中间  
+- bucket = 3：偏高  
+
+**特点：**
+
+- NTILE 是“把整个样本平均切成 n 份”，每份行数差不超过 1。
+- 它只给你 **桶号**，并不会告诉你“P99 的阈值是多少毫秒”。
+
+如果你想知道的指标是：
+
+- P50（中位数）：“一半请求快于/慢于这个值”  
+- P99：“99% 请求延迟低于某个值”  
+
+那你需要的是 **具体的阈值**，而不是“这个样本属于第几个桶”。  
+所以 NTILE 不满足运维/网络监控里对 P99 的精确定义。
+
+---
+
+## 2. 更标准的做法：percentile 函数
+
+不同数据库名字不完全一样，一般是：
+
+- PERCENTILE_CONT(p) WITHIN GROUP (ORDER BY latency_ms)
+- PERCENTILE_DISC(p) WITHIN GROUP (ORDER BY latency_ms)
+
+典型查询（按 service 维度看网络延迟的 P50 / P95 / P99）：
+
+SELECT
+  service_name,
+  PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY latency_ms) AS p50,
+  PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms) AS p95,
+  PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY latency_ms) AS p99
+FROM latency_logs
+GROUP BY service_name;
+
+含义：
+
+- `0.50 / 0.95 / 0.99` 就是 50% / 95% / 99% 分位。  
+- `PERCENTILE_CONT` 会按分布做插值，比单纯“取第 N 行”更平滑。  
+
+如果你的数据库支持这一套（PostgreSQL、Oracle、部分 MySQL 版本、一些云仓库等），**这就是最推荐的方式**。
+
+---
+
+## 3. 如果没有 percentile 函数，可以用窗口函数“手搓”
+
+思路：  
+- 对每个分区（比如 service）按延迟排序。  
+- 给每行标一个 `row_number` 或 `rank`，再算它在整组里的“累计百分比”。  
+- 找到“累计百分比 >= 0.99 的第一行”作为 P99。
+
+示例（用 `CUME_DIST`，如果有）：
+
+SELECT
+  service_name,
+  latency_ms,
+  CUME_DIST() OVER (
+    PARTITION BY service_name
+    ORDER BY latency_ms
+  ) AS cum_pct
+FROM latency_logs;
+
+再包一层：
+
+SELECT *
+FROM (
+  SELECT
+    service_name,
+    latency_ms,
+    CUME_DIST() OVER (
+      PARTITION BY service_name
+      ORDER BY latency_ms
+    ) AS cum_pct
+  FROM latency_logs
+) t
+WHERE cum_pct >= 0.99
+QUALIFY ROW_NUMBER() OVER (
+  PARTITION BY service_name
+  ORDER BY cum_pct
+) = 1;
+
+（具体语法视数据库而定，有的用子查询 + WHERE，有的支持 QUALIFY。）
+
+如果没有 `CUME_DIST`，也可以：
+
+- 先用 `ROW_NUMBER()` 算行号  
+- 用 `COUNT(*) OVER (PARTITION BY ...)` 算总行数  
+- `row_num / total_count >= 0.99` 的最小行，就是 P99 近似。
+
+---
+
+## 4. NTILE 在这种场景能干什么？
+
+虽然不适合直接输出“P99=多少 ms”，但可以用来做**粗颗粒的分层分析**，例如：
+
+- 把延迟按大小分成 10 桶（Decile）：`NTILE(10)`  
+- 看每个桶里请求数、错误率、某些特征的分布。
+
+示例：
+
+SELECT
+  NTILE(10) OVER (ORDER BY latency_ms) AS decile,
+  COUNT(*) AS req_count,
+  AVG(latency_ms) AS avg_latency
+FROM latency_logs
+GROUP BY decile
+ORDER BY decile;
+
+用途：
+
+- 直观看“尾部延迟那几桶”的特征（比如第 9、10 桶）。  
+- 做 A/B 实验分层。
+
+**但它输出的是“第几桶”，不是“P99 阈值是多少”。**
+
+---
+
+## 5. 小结（运维/网络场景记忆版）
+
+- **精确 KPI：P50 / P95 / P99 → 优先 `PERCENTILE_CONT` / `PERCENTILE_DISC` / 类似 percentile 函数。**  
+- 数据库不支持 percentile：用窗口函数 + 排序（`CUME_DIST` / `ROW_NUMBER` + `COUNT`）自己算。  
+- NTILE：  
+  - 适合“分层/打标签”（Top10%、Bottom10% 分桶分析）  
+  - 不适合作为“直接输出 P99 数值”的工具。
+
+如果你告诉我具体在用哪种数据库（MySQL / Postgres / Redshift / BigQuery 等），我可以帮你写一版“该数据库风格”的 P50/P99 查询模板，你直接贴到工具里跑就行。
+
