@@ -1,14 +1,21 @@
-Subqueries 和 CTE 都是“嵌套查询”的写法，本质能力相似，但在可读性、复用性和执行场景上各有优势。
+## Subqueries 与 CTE：概念、异同与应用场景
 
-一、基本概念
+本文用 Markdown 结构组织概念说明；所有 SQL 代码以纯文本形式嵌入，方便你直接复制。
 
-1) Subquery（子查询）
+---
 
-子查询就是把一个 SELECT 放在另一个查询里面使用。常见位置有：
+## 一、基本概念
 
-a) SELECT 子句（标量子查询）
+### 1. Subquery（子查询）
 
-示例：给每一行加上一个“全表平均工资”的列
+子查询就是把一个 SELECT 放在另一个查询里面使用，是“查询里的查询”。  
+常见位置有：SELECT、FROM、WHERE/HAVING 等。
+
+#### a) SELECT 子句（标量子查询）
+
+用途：给每一行增加一个“全表级别”或“其他条件下”的汇总值。
+
+示例：
 
 SELECT
   e.employee_id,
@@ -16,9 +23,15 @@ SELECT
   (SELECT AVG(salary) FROM employees) AS avg_salary
 FROM employees e;
 
-特点：子查询只返回一个值（1 行 1 列）。
+要点：  
+- 内层子查询返回 1 行 1 列（标量）。  
+- 外层把这个值当作一个普通列使用。
 
-b) FROM 子句（把子查询当成临时表）
+#### b) FROM 子句（子查询当成临时表）
+
+用途：把复杂逻辑先算成一个中间结果，再在外层继续筛选或聚合。
+
+示例：
 
 SELECT
   t.department_id,
@@ -30,16 +43,22 @@ FROM (
 ) t
 WHERE t.total_salary > 100000;
 
-特点：把中间结果组织清楚，再在外层继续筛选、聚合。
+要点：  
+- 内层子查询产出一张临时表 t。  
+- 外层可以继续做 WHERE、JOIN、GROUP BY 等操作。
 
-c) WHERE / HAVING 子句
+#### c) WHERE / HAVING 子句（条件子查询）
+
+常见写法：IN、EXISTS、NOT EXISTS 等。
 
 IN 示例：
 
 SELECT *
 FROM employees
 WHERE department_id IN (
-  SELECT id FROM departments WHERE location = 'NY'
+  SELECT id
+  FROM departments
+  WHERE location = 'NY'
 );
 
 EXISTS / 相关子查询示例：
@@ -53,9 +72,15 @@ WHERE EXISTS (
     AND e.salary > 100000
 );
 
-特点：更像“条件表达式”，可以写出“是否存在某些行”的逻辑。
+要点：  
+- 强调“集合”或“存在性”逻辑（是否有满足条件的行）。  
+- 相关子查询（correlated subquery）会引用外层表（如 d.id）。
 
-2) CTE（Common Table Expression，公用表表达式）
+---
+
+### 2. CTE（Common Table Expression，公用表表达式）
+
+语法：在查询开头用 WITH 定义一个或多个“中间结果”，在后续查询中像表一样使用。
 
 基本语法：
 
@@ -68,9 +93,10 @@ SELECT *
 FROM dept_salary
 WHERE total_salary > 100000;
 
-可以理解为：在查询开始前先声明一个“只在本次查询有效的临时视图/中间表”。
+理解方式：  
+- 可以把 dept_salary 看成“只在这条 SQL 里有效的临时视图/中间表”。
 
-多个 CTE 示例：
+#### 多个 CTE 示例
 
 WITH dept_salary AS (
   SELECT department_id, SUM(salary) AS total_salary
@@ -86,29 +112,54 @@ SELECT *
 FROM employees
 WHERE department_id IN (SELECT department_id FROM high_salary_dept);
 
-还可以写递归 CTE（常用于组织结构树、目录树等层级结构），这是子查询做不到的。
+要点：  
+- 按“步骤”拆分逻辑，每一步有清晰的名字。  
+- 下方主查询可以多次引用这些 CTE。
 
-二、Subquery 与 CTE 的相同点
+#### 递归 CTE（Recursive CTE）
 
-1) 都是用 SELECT 生成中间结果，再在外层查询中使用。
-2) 大多数情况下，可以互相改写（FROM 子查询 ↔ CTE）。
-3) 性能上，在很多数据库中差不多，取决于具体优化器实现。
+特点：  
+- 支持自我引用，用于树/层级结构（组织架构、目录树等）。  
+- 这是普通子查询不具备的能力。
 
-三、Subquery 与 CTE 的不同点（关键）
+---
 
-1) 可读性
+## 二、Subquery 与 CTE 的相同点
 
-- Subquery：嵌套层数多时，很容易变成“括号地狱”，逻辑不直观。
-- CTE：先在 WITH 部分分块定义逻辑，每一块起一个有意义的名字，可读性更好。
+1. 本质都用 SELECT 生成中间结果，再在外层查询中使用。  
+2. 大多数非递归场景，子查询和 CTE 可以互相改写：  
+   - FROM (SELECT ...) t ↔ WITH t AS (SELECT ...) SELECT ... FROM t  
+3. 在很多数据库（如 MySQL、PostgreSQL）里，简单场景下性能差异通常不大，优化器会进行等价转换。
 
-=> 当逻辑比较复杂、多步处理时，CTE 更适合作为“可读的分步骤管道”。
+---
 
-2) 复用性
+## 三、Subquery 与 CTE 的主要差异
 
-- Subquery：同样的子查询如果需要用多次，只能复制粘贴，后期维护麻烦。
-- CTE：同一个 CTE 可以在下面的查询中引用多次。
+### 1. 可读性
 
-示例：多次复用 dept_salary：
+- Subquery：  
+  - 简单场景语句短、直接。  
+  - 多层嵌套很容易变成“括号地狱”，阅读困难。  
+
+- CTE：  
+  - 前面用 WITH 分块写每一步逻辑。  
+  - 每一步起有意义的名字，可读性更好。
+
+结论：  
+- 逻辑复杂、多步处理时，用 CTE 更利于理解与维护。
+
+---
+
+### 2. 复用性
+
+- Subquery：  
+  - 同一段逻辑在一个查询里要用多次，只能复制粘贴。  
+  - 维护成本高，修改容易漏。  
+
+- CTE：  
+  - 在 WITH 里定义一次，下面可以多次引用。  
+
+示例（多次复用同一 CTE）：
 
 WITH dept_salary AS (
   SELECT department_id, SUM(salary) AS total_salary
@@ -119,79 +170,139 @@ SELECT * FROM dept_salary WHERE total_salary > 100000
 UNION ALL
 SELECT * FROM dept_salary WHERE total_salary BETWEEN 50000 AND 100000;
 
-3) 调试和重构
+---
 
-- Subquery：中间结果不方便单独跑，通常要从整条 SQL 中剪出来改。
-- CTE：WITH 里的每块本质就是一个 SELECT，可以单独执行、调试，然后再拼回去。
+### 3. 调试与重构
 
-4) 递归能力
+- Subquery：  
+  - 想看中间结果，通常要把子查询剪出来单独跑，比较麻烦。  
 
-- Subquery：只能写普通嵌套，没有递归语义。
-- CTE：支持 Recursive CTE，可以实现层级结构、树形结构的向上/向下遍历。
+- CTE：  
+  - WITH 里的每一块本质都是普通 SELECT，可以单独执行。  
+  - 调试时可先跑 CTE，再逐步加后续逻辑。
 
-5) 优化行为（视具体数据库）
+---
 
-- 有些数据库对 CTE 会物化，像临时表一样先算完再用，有时有利于复杂查询，有时会带来额外 I/O。
-- 子查询一般由优化器自动重写、内联，执行计划会和 CTE 略有不同。
-- 实战中要看 EXPLAIN / EXPLAIN ANALYZE 来判断具体表现。
+### 4. 递归能力
 
-四、和临时表 / 视图的比较
+- Subquery：  
+  - 只能做普通嵌套，没有递归语义。  
 
-1) 临时表（Temporary Table）
+- CTE：  
+  - 支持 Recursive CTE，可在一条 SQL 中实现树遍历、层级展开等。  
 
-- 显式建表：CREATE TEMPORARY TABLE ... AS SELECT ...
-- 生命周期可以跨多条 SQL，用于复杂多步处理、加索引、反复读写。
-- 更偏“物理层”，通常需要额外权限，也会占用存储和元数据。
+这是 CTE 在功能上的明显扩展点。
 
-2) 视图（View）
+---
 
-- CREATE VIEW 定义的“持久逻辑表”，供多个查询复用。
-- 是数据库对象，适合抽象公共查询逻辑、对外提供统一接口。
+### 5. 优化行为（与具体数据库实现相关）
 
-3) CTE / Subquery
+- 一些数据库会对 CTE 做“物化”（materialize）：  
+  - 优点：复用 CTE 时可以避免重复计算。  
+  - 缺点：数据量大时，可能增加 I/O 和内存占用。  
 
-- 完全属于“单条 SQL 内部”的结构，不会在数据库里留下对象。
-- 更适合数据分析、报表场景中快速表达复杂逻辑。
+- 子查询通常由优化器重写/内联：  
+  - 比如 IN (SELECT ...) 被转成半连接（semi-join）等执行计划。  
 
-可记忆为：
+实战建议：  
+- 写完复杂查询后，用 EXPLAIN / EXPLAIN ANALYZE 看执行计划。  
+- 若发现 CTE/子查询成为瓶颈，可考虑改写为临时表、物化视图等。
 
-- Subquery/CTE：一次性、单条 SQL 内的逻辑拆分。
-- 临时表：多步处理 + 需要加索引 + 跨语句使用。
-- 视图：长期复用 + 要共享给他人或上层应用使用的查询逻辑。
+---
 
-五、典型应用场景建议
+## 四、与临时表 / 视图的比较
 
-1) 优先考虑子查询的场景
+### 1. 临时表（Temporary Table）
 
-- 简单“集合/存在性”判断：
-  - WHERE IN (SELECT ...)
-  - WHERE EXISTS (SELECT 1 FROM ...)
-- 简单标量子查询（给每行增加“全表汇总指标”的列）：
-  - SELECT ..., (SELECT MAX(...)), (SELECT AVG(...)) ...
+特点：  
+- 显式建表，例如：
 
-这类逻辑短小，用子查询比 CTE 更直接。
+CREATE TEMPORARY TABLE dept_salary_tmp AS
+SELECT department_id, SUM(salary) AS total_salary
+FROM employees
+GROUP BY department_id;
 
-2) 优先考虑 CTE 的场景
+- 生命周期可以跨多条 SQL。  
+- 可建索引、更新数据，更偏“物理层”。  
+- 适用于海量数据、多步计算、需要物理调优的场景。
 
-- 报表 / 分析 SQL，逻辑较复杂，需要多步变换：
-  - 第一步：过滤原始数据
-  - 第二步：聚合或打标签
-  - 第三步：再关联其他维度表
-  - 第四步：做窗口函数 / 进一步聚合
-- 需要在同一条 SQL 里多次复用相同的中间结果。
-- 需要写递归逻辑（组织层级、上下级关系、路径展开等）。
+### 2. 视图（View）
 
-3) 性能与工程实践上的取舍
+特点：  
 
-- 逻辑简单：倾向用 Subquery，语句更短、更易上手。
-- 逻辑中等或复杂：优先用 CTE 提升可读性，方便团队协作和 code review。
-- 碰到性能瓶颈：结合执行计划分析优化器对 CTE / 子查询的处理：
-  - 必要时改成临时表（可建索引）
-  - 或物化视图 / 预计算表
-  - 或改写连接方式 / 过滤顺序
+CREATE VIEW dept_salary AS
+SELECT department_id, SUM(salary) AS total_salary
+FROM employees
+GROUP BY department_id;
 
-六、一句话总结
+- 数据库级别对象，供多个查询、多位用户复用。  
+- 好处：统一逻辑、统一权限控制、减少重复 SQL。
 
-- Subquery：适合简短、局部的“嵌套条件”或“补充一列”的场景。
-- CTE：适合复杂、多步骤、需要复用或递归的场景，是“结构化 SQL 逻辑”的利器。
-- 临时表 / 视图：从“一次性 SQL 内部结构”升级到“可跨语句 / 跨人员复用的数据库对象”。
+### 3. CTE / Subquery
+
+特点：  
+- 完全属于“单条 SQL 内部”：  
+  - 不会在数据库中留下持久对象。  
+  - 非常适合一次性的分析、报表、数据探索。
+
+可以总结为：  
+- Subquery/CTE：一次性、单条 SQL 内部的逻辑拆分。  
+- 临时表：跨语句、多步处理、可建索引、偏物理优化。  
+- 视图：长期复用、对外共享的逻辑抽象。
+
+---
+
+## 五、典型应用场景建议
+
+### 1. 更适合用 Subquery 的场景
+
+- 简单集合 / 存在性判断：  
+  - WHERE IN (SELECT ...)  
+  - WHERE EXISTS (SELECT 1 FROM ...)  
+
+- 简单标量汇总，给每行增加一个“全局指标”列：
+
+SELECT
+  e.employee_id,
+  e.salary,
+  (SELECT AVG(salary) FROM employees) AS avg_salary
+FROM employees e;
+
+特点：  
+- 语句短小，直接写子查询即可，不必上升到 CTE。
+
+---
+
+### 2. 更适合用 CTE 的场景
+
+- 报表、分析类 SQL，逻辑有多步变换，比如：  
+  1. 预过滤原始数据；  
+  2. 聚合或打标签；  
+  3. 再 JOIN 其他维度表；  
+  4. 再做窗口函数或二次聚合；  
+
+- 同一中间结果需要在后续多次使用（多处 JOIN、UNION、过滤）。  
+
+- 需要递归逻辑（组织结构、目录树、上下级关系等）。
+
+---
+
+### 3. 性能与工程实践取舍
+
+- 逻辑简单：  
+  - 倾向用 Subquery，SQL 更短。  
+
+- 逻辑复杂：  
+  - 倾向用 CTE，结构更清晰，方便代码评审与维护。  
+
+- 遇到性能问题：  
+  - 看执行计划，检查 CTE 是否被重复扫描或物化成本过高；  
+  - 必要时改成临时表、物化视图，或调整写法（JOIN 顺序、过滤顺序等）。
+
+---
+
+## 六、一句话总结
+
+- Subquery：适合“局部嵌套”和“简单条件/标量补充”的场景，语句短小精悍。  
+- CTE：适合“复杂多步骤逻辑”“需要复用中间结果”“需要递归”的场景，是组织大 SQL 的利器。  
+- 临时表 / 视图：适合跨语句、跨团队复用和物理调优，是从“SQL 内部结构”升级到“数据库对象”的方案。
