@@ -1,3 +1,84 @@
+`execsnoop` 是一个建立在内核 tracing 基础设施之上的专用工具，而 `ftrace` 是这些基础设施里最早、最核心的一种。它们的关系可以概括为：
+
+> ftrace 提供“内核事件追踪”的底层能力，  
+> execsnoop 利用这些能力，专门用来追踪 exec() 调用。
+
+---
+
+## 1. ftrace 是什么
+
+`ftrace`（Function Tracer）是 Linux 内核自带的 **通用内核追踪框架**，主要特点是：
+
+- 支持在运行时跟踪内核函数调用、调度事件、中断等；
+- 通过在函数入口插入“trace 桩”+ ring buffer 记录事件；
+- 通过 `tracefs`/`debugfs` 暴露接口（通常在 `/sys/kernel/debug/tracing`）；
+- 支持多种 tracer：`function`、`function_graph`、`sched`、`irqsoff`、`wakeup` 等。
+
+它提供的是一种：**“在不改内核/不重启的前提下，动态观察内核行为”** 的能力。
+
+---
+
+## 2. execsnoop 是什么
+
+`execsnoop` 是一个现成的 **“监控进程 exec() 行为”的工具**，典型输出包括：
+
+- 进程名（PCOMM）  
+- PID / PPID  
+- 返回值（RET）  
+- 完整命令行（ARGS）
+
+用处是在系统中发现：
+
+- 大量短命进程频繁被拉起（例如某应用频繁 exec 外部命令）；
+- top/ps 看不到高 CPU 进程，但整体 CPU 很高（短命进程在刷）；
+- 想要知道“到底是谁在不停地启动这些命令”。
+
+---
+
+## 3. 早期关系：execsnoop 基于 ftrace/kprobe 实现
+
+早期版本的 `execsnoop` 是 **直接基于 ftrace / kprobe** 实现的：
+
+- 利用 kprobe/ftrace 挂在内核的 `do_execve()` / `do_execveat()` 等函数上；
+- 每当有进程 exec 新程序时，收集当前进程名、PID/PPID、参数等；
+- 把这些事件推入 trace buffer，再由用户态脚本从 `trace_pipe` 读出并格式化。
+
+也就是说：
+
+> 早期的 execsnoop = “在 exec 相关内核函数上启用 ftrace/kprobe，并把事件打印成人类可读日志”。
+
+本质上是 **针对 exec 事件场景化封装的 ftrace 客户端**。
+
+---
+
+## 4. 现在的关系：可用 ftrace，也可以用 eBPF/tracepoint
+
+随着 eBPF 普及，现代的 execsnoop 实现更多是基于：
+
+- `tracepoint:sched:sched_process_exec` + eBPF；
+- BCC/bpftrace 提供的高级封装脚本。
+
+但本质没变：
+
+- 底层仍依赖 **内核的 tracing 机制**（tracepoint/kprobe/ftrace）；
+- execsnoop 只是一个“专门盯 exec 的工具视图”。
+
+---
+
+## 5. 一句话总结
+
+- **ftrace**：内核内建的通用 tracing 引擎，提供追踪函数/事件的能力；
+- **execsnoop**：利用 ftrace/tracepoint/eBPF 等 tracing 能力，专门展示 exec() 事件的工具。
+
+你可以把它们的关系理解为：
+
+> ftrace / tracepoint / eBPF = 跟踪引擎  
+> execsnoop = 基于这些引擎，专门监控 exec() 的一个“应用层工具”。
+
+
+
+---
+
 # ftrace 简介
 
 `ftrace`（Function Tracer）是 Linux 内核自带的 **内核级跟踪与分析框架**，用来在运行时观察内核函数的调用行为、延迟和调度情况。
