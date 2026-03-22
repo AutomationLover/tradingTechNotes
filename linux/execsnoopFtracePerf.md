@@ -1,3 +1,65 @@
+ftrace 本身是内核的基础设施，很多你日常会用到的工具/框架其实都是“站在 ftrace 上”的。常见的几类可以这么分：
+
+1. 内核自带工具和接口 ￼
+
+最直接的就是内核自带的 tracing 接口和配套工具，它们都把 ftrace 当底座：
+
+- ‎`tracefs` / ‎`/sys/kernel/debug/tracing` 这一整套接口
+
+通过 ‎`current_tracer`、‎`set_ftrace_filter`、‎`trace_pipe` 等文件启用/读取 ftrace，是所有 tracing 工具的“汇合点”。
+
+- ‎`trace-cmd`
+
+Red Hat 那边出的 CLI 工具，等于把 ftrace 的各种文件操作封装起来：
+
+‎`trace-cmd record`、‎`trace-cmd report`、‎`trace-cmd stat` 等，用于采集/回放内核 trace，是用 ftrace 做系统级 trace 的主力工具之一。
+
+- ‎`kernelshark`
+
+图形界面（GTK/Qt）查看 trace-cmd 录到的 ftrace 数据，做时间轴分析、事件过滤、对齐 CPU/任务视图等。
+
+- ‎`perf` 的部分子系统
+
+perf 本身核心基于 PMU/tracepoint，但有一些事件/模式会复用 ftrace（比如早期的 function tracing、某些 sched/irq 事件），可以把它看作 和 ftrace 共用一部分 trace plumbing。
+
+2. BCC / bpftrace 等 eBPF 工具中的“execsnoop 一类脚本” ￼
+
+早期像 ‎`execsnoop`、‎`opensnoop`、‎`biolatency` 这类脚本很多是基于 ftrace + kprobe 写的：
+
+- 在 ‎`do_execve()` / ‎`vfs_read()` / block 层函数上挂 ftrace/kprobe；
+
+- 把事件写进 trace buffer；
+
+- 用户态脚本读 ‎`/sys/kernel/debug/tracing/trace_pipe` 做格式化。
+
+后来它们逐渐迁到了 eBPF + tracepoint/kprobe 上，但思想是一脉相承的，依然是在用内核 tracing 基础设施（ftrace + tracepoint）提供的数据流。
+
+所以你看到的：
+
+- BCC 工具集里的老版 ‎`execsnoop`、‎`opensnoop`、‎`ext4slower` 等；
+
+- 一些自带 ‎`-t`/‎`-p` 参数的小脚本；
+
+要么直接操纵 ftrace，要么复用 ftrace 的 tracepoint/kprobe 注册能力。
+
+3. 系统级 tracing/分析工具 ￼
+
+一些更“大一号”的系统 tracing 工具，也不同程度依赖 ftrace：
+
+- LTTng / SystemTap（部分模式）
+
+虽然它们有自己的探针机制，但在某些内核事件上，会复用 tracepoint / ftrace 的基础设施。
+
+- Android systrace / AOSP 内的 tracing
+
+早期就是把 ftrace 的输出封装成更直观的 UI（浏览器时间轴），调试 UI 卡顿、scheduler 问题时大量依赖。
+
+如果概括成一句话：
+
+ftrace 是内核层的“事件总线 + trace 缓冲区”，而 trace-cmd、kernelshark、早期的 execsnoop/opensnoop 等工具，都是不同形态的“ftrace 客户端”。再往上一层，perf 部分功能、bcc/bpftrace 中一些工具和更大的 tracing 框架，也不同程度地建立在这套基础设施之上。
+
+---
+
 `execsnoop` 是一个建立在内核 tracing 基础设施之上的专用工具，而 `ftrace` 是这些基础设施里最早、最核心的一种。它们的关系可以概括为：
 
 > ftrace 提供“内核事件追踪”的底层能力，  
