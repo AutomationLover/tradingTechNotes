@@ -12,6 +12,8 @@ Quality isn’t the boundary. Authority is.
 If review is about growing humans, that makes sense. But once code can ship, the control question changes:
 - **growing humans** — 培养人才（很生动的用法）
 
+developing
+Here: nurturing or developing someone's skills. Used like a gardener grows plants — you're actively helping someone develop over time. Not just "getting bigger" but "being cultivated."
 --- 
 
 _“massively increase the utility of many web apps for screen reader users under the guise of ‘adding support for AI’”_
@@ -21,6 +23,10 @@ _“massively increase the utility of many web apps for screen reader users unde
 **常见用法** 
 - _under the guise of_ — 以……为幌子/名义（最常见搭配）
 - _in the guise of_ — 以……的面目出现
+
+An outward appearance that hides the true nature of something. Often used in the phrase "under the guise of" — meaning the surface purpose is different from the real purpose.
+
+If they don't understand you: "It's like a disguise — the word actually comes from the same root. It means doing something while pretending it's for a different reason."
 
 ---
 
@@ -39,6 +45,9 @@ Karpathy 说的是：每次发生**范式转变**时，大家最先想到的总�
 - **paradigm shift** / **paradigm change** — 范式转变（最常见搭配）
 - **a new paradigm** — 一种新范式
 - _“This challenges the existing paradigm”_ — 这挑战了现有的范式
+
+A widely accepted framework or model for how things work. A "paradigm change" means the entire way of thinking has shifted — not a small improvement, but a fundamental change in approach.
+
 
 ---
 
