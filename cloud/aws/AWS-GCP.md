@@ -54,9 +54,9 @@
 	    - 关联 Attachment：在下拉列表中选择刚才第 2 步自动生成的那个 TGW Attachment ID。
 	    - 结果：此时，GCP 侧通过 BGP 发送的路由，将正式从 DXGW 流入 TGW 的路由表中。
     - 4. **Association (关联tgw路由表)**
-		  - **意义：** 定义**流量的去向**。
-		  - **效果：** 当流量从 **GCP/本地** 顺着 DXGW 钻进 TGW 时，TGW 会查看**关联**的这张表来决定把流量转给哪个 VPC。
-		  - **操作：** 在 TGW Route Table 的 `Associations` 选项卡里，手动把那个 `tgw-attach-xxx` (DXGW类型) 勾选上。
+		- **意义：** 定义**流量的去向**。
+	    - **效果：** 当流量从 **GCP/本地** 顺着 DXGW 钻进 TGW 时，TGW 会查看**关联**的这张表来决定把流量转给哪个 VPC。
+        - **操作：** 在 TGW Route Table 的 `Associations` 选项卡里，手动把那个 `tgw-attach-xxx` (DXGW类型) 勾选上。
 
 5. **GCP NCC Spoke 关联**：
     - 将 VLAN Attachment 挂载到 NCC Hub。
