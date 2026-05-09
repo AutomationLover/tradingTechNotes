@@ -1,4 +1,98 @@
 
+---
+
+# Football English 足球场常用英文词汇
+
+## Rules & Referee 规则与裁判
+
+| English | 中文 |
+|---------|------|
+| Foul | 犯规 |
+| Offside | 越位 |
+| Yellow card | 黄牌 |
+| Red card | 红牌 |
+| Penalty | 点球 |
+| Free kick | 任意球 |
+| Handball | 手球 |
+| VAR | 视频助理裁判 |
+| Booking | 记名警告 |
+| Sending off | 罚下场 |
+| Stoppage time | 补时 |
+| Extra time | 加时赛 |
+| Throw-in | 界外球 |
+| Corner kick | 角球 |
+| Goal kick | 球门球 |
+| Referee | 裁判 |
+
+## Positions 位置
+
+| English | 中文 |
+|---------|------|
+| Goalkeeper (GK) | 守门员 |
+| Defender | 后卫 |
+| Centre-back (CB) | 中后卫 |
+| Full-back | 边后卫 |
+| Midfielder | 中场 |
+| Winger | 边锋 |
+| Striker / Forward | 前锋 |
+| Sweeper | 清道夫 |
+| Substitute | 替补球员 |
+| Captain | 队长 |
+
+## Actions & Moves 动作与技术
+
+| English | 中文 |
+|---------|------|
+| Dribble | 盘带/运球 |
+| Pass | 传球 |
+| Cross | 传中 |
+| Header | 头球 |
+| Tackle | 铲球/抢断 |
+| Volley | 凌空抽射 |
+| Chip | 挑球/吊射 |
+| Nutmeg | 穿裆 |
+| Bicycle kick | 倒钩 |
+| Shoot / Shot | 射门 |
+| Clearance | 解围 |
+| Through ball | 直塞球 |
+| One-two | 二过一配合 |
+| Dive | 假摔 |
+
+## Match Events 比赛事件
+
+| English | 中文 |
+|---------|------|
+| Goal | 进球 |
+| Own goal | 乌龙球 |
+| Hat-trick | 帽子戏法 |
+| Assist | 助攻 |
+| Clean sheet | 零封 |
+| Draw | 平局 |
+| Kickoff | 开球 |
+| Half-time | 半场 |
+| Full-time | 全场结束 |
+| Penalty shootout | 点球大战 |
+| Injury | 受伤 |
+| Substitution | 换人 |
+
+## The Pitch 球场
+
+| English | 中文 |
+|---------|------|
+| Pitch / Field | 球场 |
+| Goalpost | 门柱 |
+| Crossbar | 横梁 |
+| Penalty area | 禁区 |
+| Centre circle | 中圈 |
+| Touchline | 边线 |
+| Net | 球网 |
+| Dugout / Bench | 替补席 |
+
+
+
+---
+
+
 I think most people can learn a lot more than they think they can. They sell themselves short without trying.
 
 “Sell short” 最早来自股票市场术语 short selling（卖空）：你卖出自己并不拥有的股票，赌它会跌。本质上是低估了它的价值。
