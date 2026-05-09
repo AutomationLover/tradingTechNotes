@@ -1,3 +1,12 @@
+
+I think most people can learn a lot more than they think they can. They sell themselves short without trying.
+
+“Sell short” 最早来自股票市场术语 short selling（卖空）：你卖出自己并不拥有的股票，赌它会跌。本质上是低估了它的价值。
+
+这个金融含义后来进入日常英语，变成了习语 “sell oneself short”——低估自己的能力或价值，给自己打了折扣。
+
+---
+
 The Zig project's rationale for their blanket ban on AI-assisted contributions makes a lot of sense to me - for them, time spent reviewing PRs isn't about the code, it's about growing new contributors for the future of the project
 [source](https://t.co/9DoJqBGphp)
 “blanket” 的精髓——一刀切，覆盖一切。
